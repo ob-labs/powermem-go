@@ -141,11 +141,36 @@ func (c *Client) Insert(ctx context.Context, memory *storage.Memory) error {
 }
 
 // Search performs vector search using pgvector's cosine similarity.
+//
+// The method supports hybrid search parameters for future enhancement:
+//   - opts.Query: Original query text (reserved for full-text search using tsvector)
+//   - opts.SparseEmbedding: Sparse vector (reserved for hybrid retrieval)
+//   - opts.Threshold: Minimum similarity score (alias for MinScore)
+//
+// Currently, only vector similarity search is implemented using pgvector.
+// Hybrid search (vector + full-text + sparse) will be added in future versions.
 func (c *Client) Search(ctx context.Context, embedding []float64, opts *storage.SearchOptions) ([]*storage.Memory, error) {
+	// Use Threshold if MinScore is not set (Python SDK compatibility)
+	minScore := opts.MinScore
+	if minScore == 0 && opts.Threshold > 0 {
+		minScore = opts.Threshold
+	}
+
 	queryVectorStr := vectorToString(embedding)
 
 	// Build WHERE clause (starting from $2 since $1 is the query vector)
 	whereClause, filterArgs := buildWhereClauseWithOffset(opts.UserID, opts.AgentID, opts.Filters, 2)
+
+	// Add similarity threshold to WHERE clause if specified
+	if minScore > 0 {
+		paramNum := len(filterArgs) + 2
+		if whereClause == "" {
+			whereClause = fmt.Sprintf("WHERE 1 - (embedding <=> $1) >= $%d", paramNum)
+		} else {
+			whereClause += fmt.Sprintf(" AND 1 - (embedding <=> $1) >= $%d", paramNum)
+		}
+		filterArgs = append(filterArgs, minScore)
+	}
 
 	// Use pgvector's <=> operator (cosine distance, 1 - cosine similarity)
 	query := fmt.Sprintf(`
@@ -158,6 +183,17 @@ func (c *Client) Search(ctx context.Context, embedding []float64, opts *storage.
 		ORDER BY embedding <=> $1
 		LIMIT $%d
 	`, c.collectionName, whereClause, len(filterArgs)+2)
+
+	// TODO: Future enhancement - add full-text search support
+	// if opts.Query != "" {
+	//     // Add tsvector-based full-text search
+	//     // Combine vector similarity with text relevance
+	// }
+
+	// TODO: Future enhancement - add sparse embedding support
+	// if opts.SparseEmbedding != nil {
+	//     // Combine dense and sparse vectors for hybrid retrieval
+	// }
 
 	// Build final args: query vector, filter args, then limit
 	allArgs := []interface{}{queryVectorStr}
@@ -173,20 +209,39 @@ func (c *Client) Search(ctx context.Context, embedding []float64, opts *storage.
 	return c.scanMemories(rows, true)
 }
 
-// Get retrieves a memory by ID.
-func (c *Client) Get(ctx context.Context, id int64) (*storage.Memory, error) {
+// Get retrieves a memory by ID with optional access control.
+func (c *Client) Get(ctx context.Context, id int64, opts *storage.GetOptions) (*storage.Memory, error) {
+	if opts == nil {
+		opts = &storage.GetOptions{}
+	}
+
+	// Build WHERE clause with access control
+	whereClause := "WHERE id = $1"
+	args := []interface{}{id}
+	paramNum := 2
+
+	if opts.UserID != "" {
+		whereClause += fmt.Sprintf(" AND user_id = $%d", paramNum)
+		args = append(args, opts.UserID)
+		paramNum++
+	}
+	if opts.AgentID != "" {
+		whereClause += fmt.Sprintf(" AND agent_id = $%d", paramNum)
+		args = append(args, opts.AgentID)
+	}
+
 	query := fmt.Sprintf(`
 		SELECT id, user_id, agent_id, content, embedding, metadata,
 		       created_at, updated_at, retention_strength, last_accessed_at
 		FROM %s
-		WHERE id = $1
-	`, c.collectionName)
+		%s
+	`, c.collectionName, whereClause)
 
-	row := c.db.QueryRowContext(ctx, query, id)
+	row := c.db.QueryRowContext(ctx, query, args...)
 
 	memory, err := c.scanMemory(row)
 	if err == sql.ErrNoRows {
-		return nil, fmt.Errorf("Get: not found")
+		return nil, fmt.Errorf("Get: not found or access denied")
 	}
 	if err != nil {
 		return nil, fmt.Errorf("Get: %w", err)
@@ -195,17 +250,36 @@ func (c *Client) Get(ctx context.Context, id int64) (*storage.Memory, error) {
 	return memory, nil
 }
 
-// Update updates a memory.
-func (c *Client) Update(ctx context.Context, id int64, content string, embedding []float64) (*storage.Memory, error) {
+// Update updates a memory with optional access control.
+func (c *Client) Update(ctx context.Context, id int64, content string, embedding []float64, opts *storage.UpdateOptions) (*storage.Memory, error) {
+	if opts == nil {
+		opts = &storage.UpdateOptions{}
+	}
+
 	vectorStr := vectorToString(embedding)
+
+	// Build WHERE clause with access control
+	whereClause := "WHERE id = $4"
+	args := []interface{}{content, vectorStr, time.Now(), id}
+	paramNum := 5
+
+	if opts.UserID != "" {
+		whereClause += fmt.Sprintf(" AND user_id = $%d", paramNum)
+		args = append(args, opts.UserID)
+		paramNum++
+	}
+	if opts.AgentID != "" {
+		whereClause += fmt.Sprintf(" AND agent_id = $%d", paramNum)
+		args = append(args, opts.AgentID)
+	}
 
 	query := fmt.Sprintf(`
 		UPDATE %s
 		SET content = $1, embedding = $2, updated_at = $3
-		WHERE id = $4
-	`, c.collectionName)
+		%s
+	`, c.collectionName, whereClause)
 
-	result, err := c.db.ExecContext(ctx, query, content, vectorStr, time.Now(), id)
+	result, err := c.db.ExecContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("Update: %w", err)
 	}
@@ -216,17 +290,39 @@ func (c *Client) Update(ctx context.Context, id int64, content string, embedding
 	}
 
 	if rowsAffected == 0 {
-		return nil, fmt.Errorf("Update: not found")
+		return nil, fmt.Errorf("Update: not found or access denied")
 	}
 
-	return c.Get(ctx, id)
+	return c.Get(ctx, id, &storage.GetOptions{
+		UserID:  opts.UserID,
+		AgentID: opts.AgentID,
+	})
 }
 
-// Delete deletes a memory.
-func (c *Client) Delete(ctx context.Context, id int64) error {
-	query := fmt.Sprintf("DELETE FROM %s WHERE id = $1", c.collectionName)
+// Delete deletes a memory with optional access control.
+func (c *Client) Delete(ctx context.Context, id int64, opts *storage.DeleteOptions) error {
+	if opts == nil {
+		opts = &storage.DeleteOptions{}
+	}
 
-	result, err := c.db.ExecContext(ctx, query, id)
+	// Build WHERE clause with access control
+	whereClause := "WHERE id = $1"
+	args := []interface{}{id}
+	paramNum := 2
+
+	if opts.UserID != "" {
+		whereClause += fmt.Sprintf(" AND user_id = $%d", paramNum)
+		args = append(args, opts.UserID)
+		paramNum++
+	}
+	if opts.AgentID != "" {
+		whereClause += fmt.Sprintf(" AND agent_id = $%d", paramNum)
+		args = append(args, opts.AgentID)
+	}
+
+	query := fmt.Sprintf("DELETE FROM %s %s", c.collectionName, whereClause)
+
+	result, err := c.db.ExecContext(ctx, query, args...)
 	if err != nil {
 		return fmt.Errorf("Delete: %w", err)
 	}
@@ -237,7 +333,7 @@ func (c *Client) Delete(ctx context.Context, id int64) error {
 	}
 
 	if rowsAffected == 0 {
-		return fmt.Errorf("Delete: not found")
+		return fmt.Errorf("Delete: not found or access denied")
 	}
 
 	return nil

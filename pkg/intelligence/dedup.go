@@ -107,8 +107,8 @@ func (m *DedupManager) CheckDuplicate(ctx context.Context, embedding []float64, 
 //
 // Returns the merged memory, or an error if merge fails.
 func (m *DedupManager) MergeMemories(ctx context.Context, existingID int64, newContent string, newEmbedding []float64) (*Memory, error) {
-	// Get existing memory
-	existing, err := m.store.Get(ctx, existingID)
+	// Get existing memory (without access control in dedup context)
+	existing, err := m.store.Get(ctx, existingID, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -120,8 +120,8 @@ func (m *DedupManager) MergeMemories(ctx context.Context, existingID int64, newC
 	// Calculate new embedding (average of both embeddings)
 	mergedEmbedding := averageEmbeddings(existing.Embedding, newEmbedding)
 
-	// Update memory
-	updated, err := m.store.Update(ctx, existingID, mergedContent, mergedEmbedding)
+	// Update memory (without access control in dedup context)
+	updated, err := m.store.Update(ctx, existingID, mergedContent, mergedEmbedding, nil)
 	if err != nil {
 		return nil, err
 	}

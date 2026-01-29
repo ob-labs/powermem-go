@@ -417,3 +417,108 @@ func applyDeleteAllOptions(opts []DeleteAllOption) *DeleteAllOptions {
 	}
 	return options
 }
+
+// GetOption is a function type for configuring Get operations.
+type GetOption func(*GetOptions)
+
+// GetOptions contains configuration options for Get operations with access control.
+type GetOptions struct {
+	// UserID restricts access to memories belonging to this user (multi-tenant isolation).
+	UserID string
+
+	// AgentID restricts access to memories belonging to this agent (agent-level access control).
+	AgentID string
+}
+
+// WithUserIDForGet sets the user ID for Get operations (access control).
+func WithUserIDForGet(userID string) GetOption {
+	return func(opts *GetOptions) {
+		opts.UserID = userID
+	}
+}
+
+// WithAgentIDForGet sets the agent ID for Get operations (access control).
+func WithAgentIDForGet(agentID string) GetOption {
+	return func(opts *GetOptions) {
+		opts.AgentID = agentID
+	}
+}
+
+// UpdateOption is a function type for configuring Update operations.
+type UpdateOption func(*UpdateOptions)
+
+// UpdateOptions contains configuration options for Update operations with access control.
+type UpdateOptions struct {
+	// UserID restricts updates to memories belonging to this user (prevents cross-tenant updates).
+	UserID string
+
+	// AgentID restricts updates to memories belonging to this agent (agent-level access control).
+	AgentID string
+}
+
+// WithUserIDForUpdate sets the user ID for Update operations (access control).
+func WithUserIDForUpdate(userID string) UpdateOption {
+	return func(opts *UpdateOptions) {
+		opts.UserID = userID
+	}
+}
+
+// WithAgentIDForUpdate sets the agent ID for Update operations (access control).
+func WithAgentIDForUpdate(agentID string) UpdateOption {
+	return func(opts *UpdateOptions) {
+		opts.AgentID = agentID
+	}
+}
+
+// DeleteOption is a function type for configuring Delete operations.
+type DeleteOption func(*DeleteOptions)
+
+// DeleteOptions contains configuration options for Delete operations with access control.
+type DeleteOptions struct {
+	// UserID restricts deletions to memories belonging to this user (prevents cross-tenant deletions).
+	UserID string
+
+	// AgentID restricts deletions to memories belonging to this agent (agent-level access control).
+	AgentID string
+}
+
+// WithUserIDForDelete sets the user ID for Delete operations (access control).
+func WithUserIDForDelete(userID string) DeleteOption {
+	return func(opts *DeleteOptions) {
+		opts.UserID = userID
+	}
+}
+
+// WithAgentIDForDelete sets the agent ID for Delete operations (access control).
+func WithAgentIDForDelete(agentID string) DeleteOption {
+	return func(opts *DeleteOptions) {
+		opts.AgentID = agentID
+	}
+}
+
+// applyGetOptions applies Get options to create GetOptions.
+func applyGetOptions(opts []GetOption) *GetOptions {
+	options := &GetOptions{}
+	for _, opt := range opts {
+		opt(options)
+	}
+	return options
+}
+
+// applyUpdateOptions applies Update options to create UpdateOptions.
+func applyUpdateOptions(opts []UpdateOption) *UpdateOptions {
+	options := &UpdateOptions{}
+	for _, opt := range opts {
+		opt(options)
+	}
+	return options
+}
+
+// applyDeleteOptions applies Delete options to create DeleteOptions.
+func applyDeleteOptions(opts []DeleteOption) *DeleteOptions {
+	options := &DeleteOptions{}
+	for _, opt := range opts {
+		opt(options)
+	}
+	return options
+}

@@ -14,7 +14,7 @@ func main() {
 	fmt.Println("PowerMem Go SDK - Multi-Agent Collaboration Example")
 	fmt.Println("=" + repeat("=", 79))
 
-	// 查找配置文件
+	// Find config file
 	envPath, found := powermem.FindEnvFile()
 	if !found {
 		fmt.Println("\n⚠️  No .env file found!")
@@ -30,21 +30,21 @@ func main() {
 		}
 	}
 
-	// 加载配置
+	// Load configuration
 	fmt.Println("\nLoading configuration...")
 	config, err := powermem.LoadConfigFromEnv()
 	if err != nil {
 		log.Fatalf("Failed to load config: %v", err)
 	}
 
-	// 配置多代理支持
+	// Configure multi-agent support
 	config.AgentMemory = &powermem.AgentMemoryConfig{
 		DefaultScope:          powermem.ScopePrivate,
 		AllowCrossAgentAccess: false,
 		CollaborationLevel:    "read_only",
 	}
 
-	// 创建客户端
+	// Create client
 	client, err := powermem.NewClient(config)
 	if err != nil {
 		log.Fatalf("Failed to create client: %v", err)
@@ -71,12 +71,12 @@ func main() {
 
 	fmt.Println("\n=== Multi-Agent Collaboration Scenario ===")
 
-	// 场景：三个 AI 代理协作处理用户请求
-	// - Agent1: 个人助手（私有记忆）
-	// - Agent2: 学习助手（私有记忆）
-	// - Agent3: 任务管理器（共享记忆）
+	// Scenario: Three AI agents collaborating to handle user requests
+	// - Agent1: Personal Assistant (private memory)
+	// - Agent2: Learning Assistant (private memory)
+	// - Agent3: Task Manager (shared memory)
 
-	// Agent1: 个人助手添加私有信息
+	// Agent1: Personal Assistant adds private information
 	fmt.Println("1. Agent1 (Personal Assistant) adding private memory:")
 	_, err = client.Add(ctx, "User's birthday is on March 15th",
 		powermem.WithUserID(userID),
@@ -102,7 +102,7 @@ func main() {
 	}
 	fmt.Println("   ✓ Added: User prefers email notifications")
 
-	// Agent2: 学习助手添加学习相关记忆
+	// Agent2: Learning Assistant adds learning-related memory
 	fmt.Println("\n2. Agent2 (Learning Assistant) adding learning memory:")
 	_, err = client.Add(ctx, "User is learning Go programming",
 		powermem.WithUserID(userID),
@@ -128,12 +128,12 @@ func main() {
 	}
 	fmt.Println("   ✓ Added: User completed chapter 3 of Go tutorial")
 
-	// Agent3: 任务管理器添加共享记忆
+	// Agent3: Task Manager adds shared memory
 	fmt.Println("\n3. Agent3 (Task Manager) adding shared memory:")
 	_, err = client.Add(ctx, "User has a meeting at 2 PM tomorrow",
 		powermem.WithUserID(userID),
 		powermem.WithAgentID("agent3_tasks"),
-		powermem.WithScope(powermem.ScopeAgentGroup), // 代理组共享
+		powermem.WithScope(powermem.ScopeAgentGroup), // Agent group shared
 		powermem.WithMetadata(map[string]interface{}{
 			"type":     "schedule",
 			"priority": "high",
@@ -147,17 +147,17 @@ func main() {
 	_, err = client.Add(ctx, "User's timezone is UTC+8",
 		powermem.WithUserID(userID),
 		powermem.WithAgentID("agent3_tasks"),
-		powermem.WithScope(powermem.ScopeGlobal), // 全局共享
+		powermem.WithScope(powermem.ScopeGlobal), // Global shared
 	)
 	if err != nil {
 		log.Fatalf("Failed to add memory: %v", err)
 	}
 	fmt.Println("   ✓ Added: User's timezone is UTC+8 (global shared)")
 
-	// 各个代理搜索自己可见的记忆
+	// Each agent searches for its visible memories
 	fmt.Println("\n4. Each agent searching for memories:")
 
-	// Agent1 搜索
+	// Agent1 searches
 	fmt.Println("\n   Agent1 (Personal Assistant) searching for 'user':")
 	agent1Results, err := client.Search(ctx, "user",
 		powermem.WithUserIDForSearch(userID),
@@ -172,7 +172,7 @@ func main() {
 		fmt.Printf("     - %s\n", mem.Content)
 	}
 
-	// Agent2 搜索
+	// Agent2 searches
 	fmt.Println("\n   Agent2 (Learning Assistant) searching for 'learning':")
 	agent2Results, err := client.Search(ctx, "learning",
 		powermem.WithUserIDForSearch(userID),
@@ -187,7 +187,7 @@ func main() {
 		fmt.Printf("     - %s\n", mem.Content)
 	}
 
-	// Agent3 搜索
+	// Agent3 searches
 	fmt.Println("\n   Agent3 (Task Manager) searching for 'user':")
 	agent3Results, err := client.Search(ctx, "user",
 		powermem.WithUserIDForSearch(userID),
@@ -202,7 +202,7 @@ func main() {
 		fmt.Printf("     - %s\n", mem.Content)
 	}
 
-	// 获取用户的所有记忆（不限制 agent）
+	// Get all memories for user (no agent restriction)
 	fmt.Println("\n5. Getting all memories for user:")
 	allMemories, err := client.GetAll(ctx,
 		powermem.WithUserIDForGetAll(userID),
@@ -213,7 +213,7 @@ func main() {
 	}
 	fmt.Printf("   User has %d total memories\n", len(allMemories))
 
-	// 清理特定代理的记忆
+	// Clean up specific agent's memories
 	fmt.Println("\n6. Cleaning up Agent2's memories:")
 	err = client.DeleteAll(ctx,
 		powermem.WithUserIDForDeleteAll(userID),

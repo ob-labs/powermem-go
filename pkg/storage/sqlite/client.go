@@ -162,7 +162,21 @@ func (c *Client) Insert(ctx context.Context, memory *storage.Memory) error {
 //
 // SQLite does not have native vector operations, so similarity is calculated
 // in memory after loading all matching records.
+//
+// The method supports hybrid search parameters for future enhancement:
+//   - opts.Query: Original query text (reserved for full-text search)
+//   - opts.SparseEmbedding: Sparse vector (reserved for sparse + dense hybrid)
+//   - opts.Threshold: Minimum similarity score (alias for MinScore)
+//
+// Currently, only vector similarity search is implemented.
+// Hybrid search (vector + full-text + sparse) will be added in future versions.
 func (c *Client) Search(ctx context.Context, embedding []float64, opts *storage.SearchOptions) ([]*storage.Memory, error) {
+	// Use Threshold if MinScore is not set (Python SDK compatibility)
+	minScore := opts.MinScore
+	if minScore == 0 && opts.Threshold > 0 {
+		minScore = opts.Threshold
+	}
+
 	whereClause, args := buildWhereClause(opts.UserID, opts.AgentID, opts.Filters)
 
 	// SQLite requires manual cosine similarity calculation
@@ -174,6 +188,9 @@ func (c *Client) Search(ctx context.Context, embedding []float64, opts *storage.
 		%s
 		ORDER BY id
 	`, c.collectionName, whereClause)
+
+	// TODO: Future enhancement - add full-text search support using opts.Query
+	// This would enable hybrid retrieval combining vector similarity and keyword matching
 
 	rows, err := c.db.QueryContext(ctx, query, args...)
 	if err != nil {
@@ -192,9 +209,17 @@ func (c *Client) Search(ctx context.Context, embedding []float64, opts *storage.
 		score := cosineSimilarity(embedding, memory.Embedding)
 		memory.Score = score
 
-		if score >= opts.MinScore {
+		// Apply threshold filter
+		if score >= minScore {
 			memories = append(memories, memory)
 		}
+
+		// TODO: Future enhancement - combine with sparse embedding similarity
+		// if opts.SparseEmbedding != nil {
+		//     sparseScore := calculateSparseSimilarity(opts.SparseEmbedding, memory.SparseEmbedding)
+		//     combinedScore := (score + sparseScore) / 2.0
+		//     memory.Score = combinedScore
+		// }
 	}
 
 	if err := rows.Err(); err != nil {
@@ -207,20 +232,37 @@ func (c *Client) Search(ctx context.Context, embedding []float64, opts *storage.
 	return memories, nil
 }
 
-// Get retrieves a memory by ID.
-func (c *Client) Get(ctx context.Context, id int64) (*storage.Memory, error) {
+// Get retrieves a memory by ID with optional access control.
+func (c *Client) Get(ctx context.Context, id int64, opts *storage.GetOptions) (*storage.Memory, error) {
+	if opts == nil {
+		opts = &storage.GetOptions{}
+	}
+
+	// Build WHERE clause with access control
+	whereClause := "WHERE id = ?"
+	args := []interface{}{id}
+
+	if opts.UserID != "" {
+		whereClause += " AND user_id = ?"
+		args = append(args, opts.UserID)
+	}
+	if opts.AgentID != "" {
+		whereClause += " AND agent_id = ?"
+		args = append(args, opts.AgentID)
+	}
+
 	query := fmt.Sprintf(`
 		SELECT id, user_id, agent_id, content, embedding, metadata,
 		       created_at, updated_at, retention_strength, last_accessed_at
 		FROM %s
-		WHERE id = ?
-	`, c.collectionName)
+		%s
+	`, c.collectionName, whereClause)
 
-	row := c.db.QueryRowContext(ctx, query, id)
+	row := c.db.QueryRowContext(ctx, query, args...)
 
 	memory, err := c.scanMemory(row)
 	if err == sql.ErrNoRows {
-		return nil, fmt.Errorf("Get: not found")
+		return nil, fmt.Errorf("Get: not found or access denied")
 	}
 	if err != nil {
 		return nil, fmt.Errorf("Get: %w", err)
@@ -229,20 +271,37 @@ func (c *Client) Get(ctx context.Context, id int64) (*storage.Memory, error) {
 	return memory, nil
 }
 
-// Update updates a memory.
-func (c *Client) Update(ctx context.Context, id int64, content string, embedding []float64) (*storage.Memory, error) {
+// Update updates a memory with optional access control.
+func (c *Client) Update(ctx context.Context, id int64, content string, embedding []float64, opts *storage.UpdateOptions) (*storage.Memory, error) {
+	if opts == nil {
+		opts = &storage.UpdateOptions{}
+	}
+
 	embeddingJSON, err := json.Marshal(embedding)
 	if err != nil {
 		return nil, fmt.Errorf("Update: %w", err)
 	}
 
+	// Build WHERE clause with access control
+	whereClause := "WHERE id = ?"
+	args := []interface{}{content, string(embeddingJSON), time.Now(), id}
+
+	if opts.UserID != "" {
+		whereClause += " AND user_id = ?"
+		args = append(args, opts.UserID)
+	}
+	if opts.AgentID != "" {
+		whereClause += " AND agent_id = ?"
+		args = append(args, opts.AgentID)
+	}
+
 	query := fmt.Sprintf(`
 		UPDATE %s
 		SET content = ?, embedding = ?, updated_at = ?
-		WHERE id = ?
-	`, c.collectionName)
+		%s
+	`, c.collectionName, whereClause)
 
-	result, err := c.db.ExecContext(ctx, query, content, string(embeddingJSON), time.Now(), id)
+	result, err := c.db.ExecContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("Update: %w", err)
 	}
@@ -253,17 +312,37 @@ func (c *Client) Update(ctx context.Context, id int64, content string, embedding
 	}
 
 	if rowsAffected == 0 {
-		return nil, fmt.Errorf("Update: not found")
+		return nil, fmt.Errorf("Update: not found or access denied")
 	}
 
-	return c.Get(ctx, id)
+	return c.Get(ctx, id, &storage.GetOptions{
+		UserID:  opts.UserID,
+		AgentID: opts.AgentID,
+	})
 }
 
-// Delete deletes a memory by ID.
-func (c *Client) Delete(ctx context.Context, id int64) error {
-	query := fmt.Sprintf("DELETE FROM %s WHERE id = ?", c.collectionName)
+// Delete deletes a memory by ID with optional access control.
+func (c *Client) Delete(ctx context.Context, id int64, opts *storage.DeleteOptions) error {
+	if opts == nil {
+		opts = &storage.DeleteOptions{}
+	}
 
-	result, err := c.db.ExecContext(ctx, query, id)
+	// Build WHERE clause with access control
+	whereClause := "WHERE id = ?"
+	args := []interface{}{id}
+
+	if opts.UserID != "" {
+		whereClause += " AND user_id = ?"
+		args = append(args, opts.UserID)
+	}
+	if opts.AgentID != "" {
+		whereClause += " AND agent_id = ?"
+		args = append(args, opts.AgentID)
+	}
+
+	query := fmt.Sprintf("DELETE FROM %s %s", c.collectionName, whereClause)
+
+	result, err := c.db.ExecContext(ctx, query, args...)
 	if err != nil {
 		return fmt.Errorf("Delete: %w", err)
 	}
@@ -274,7 +353,7 @@ func (c *Client) Delete(ctx context.Context, id int64) error {
 	}
 
 	if rowsAffected == 0 {
-		return fmt.Errorf("Delete: not found")
+		return fmt.Errorf("Delete: not found or access denied")
 	}
 
 	return nil

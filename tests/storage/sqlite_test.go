@@ -75,7 +75,9 @@ func TestSQLiteClient_Get(t *testing.T) {
 	id := memory.ID
 
 	// Get memory
-	retrieved, err := store.Get(ctx, id)
+	retrieved, err := store.Get(ctx, id, &storage.GetOptions{
+		UserID: "test_user",
+	})
 	assert.NoError(t, err)
 	assert.NotNil(t, retrieved)
 	assert.Equal(t, id, retrieved.ID)
@@ -105,7 +107,9 @@ func TestSQLiteClient_Update(t *testing.T) {
 	updatedContent := "Updated content"
 	updatedEmbedding := []float64{0.2, 0.3, 0.4}
 
-	updated, err := store.Update(ctx, id, updatedContent, updatedEmbedding)
+	updated, err := store.Update(ctx, id, updatedContent, updatedEmbedding, &storage.UpdateOptions{
+		UserID: "test_user",
+	})
 	assert.NoError(t, err)
 	assert.Equal(t, updatedContent, updated.Content)
 
@@ -132,11 +136,15 @@ func TestSQLiteClient_Delete(t *testing.T) {
 	id := memory.ID
 
 	// Delete memory
-	err = store.Delete(ctx, id)
+	err = store.Delete(ctx, id, &storage.DeleteOptions{
+		UserID: "test_user",
+	})
 	assert.NoError(t, err)
 
 	// Verify deletion
-	_, err = store.Get(ctx, id)
+	_, err = store.Get(ctx, id, &storage.GetOptions{
+		UserID: "test_user",
+	})
 	assert.Error(t, err)
 }
 

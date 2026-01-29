@@ -128,7 +128,9 @@ func TestPostgresClient_Get(t *testing.T) {
 	id := memory.ID
 
 	// Get memory
-	retrieved, err := store.Get(ctx, id)
+	retrieved, err := store.Get(ctx, id, &storage.GetOptions{
+		UserID: "test_user",
+	})
 	assert.NoError(t, err)
 	assert.NotNil(t, retrieved)
 	assert.Equal(t, id, retrieved.ID)
@@ -167,7 +169,9 @@ func TestPostgresClient_Update(t *testing.T) {
 	updatedEmbedding[1] = 0.3
 	updatedEmbedding[2] = 0.4
 
-	updated, err := store.Update(ctx, id, updatedContent, updatedEmbedding)
+	updated, err := store.Update(ctx, id, updatedContent, updatedEmbedding, &storage.UpdateOptions{
+		UserID: "test_user",
+	})
 	assert.NoError(t, err)
 	assert.Equal(t, updatedContent, updated.Content)
 	assert.Equal(t, 1536, len(updated.Embedding))
@@ -197,11 +201,15 @@ func TestPostgresClient_Delete(t *testing.T) {
 	id := memory.ID
 
 	// Delete memory
-	err = store.Delete(ctx, id)
+	err = store.Delete(ctx, id, &storage.DeleteOptions{
+		UserID: "test_user",
+	})
 	assert.NoError(t, err)
 
 	// Verify deletion
-	_, err = store.Get(ctx, id)
+	_, err = store.Get(ctx, id, &storage.GetOptions{
+		UserID: "test_user",
+	})
 	assert.Error(t, err)
 }
 

@@ -14,7 +14,7 @@ func main() {
 	fmt.Println("PowerMem Go SDK - Basic Usage Example")
 	fmt.Println("=" + repeat("=", 59))
 
-	// 查找配置文件
+	// Find config file
 	envPath, found := powermem.FindEnvFile()
 	if !found {
 		fmt.Println("\n⚠️  No .env file found!")
@@ -24,21 +24,21 @@ func main() {
 		fmt.Println("\nFor now, trying to load from environment variables...")
 	} else {
 		fmt.Printf("\n✓ Found config file: %s\n", envPath)
-		// 如果找到 .env.example，提示用户复制
+		// If .env.example is found, prompt user to copy it
 		if filepath.Base(envPath) == ".env.example" {
 			fmt.Println("⚠️  Using .env.example file. Consider copying it to .env:")
 			fmt.Println("   cp .env.example .env")
 		}
 	}
 
-	// 加载配置
+	// Load configuration
 	fmt.Println("\nInitializing memory...")
 	config, err := powermem.LoadConfigFromEnv()
 	if err != nil {
 		log.Fatalf("Failed to load config: %v", err)
 	}
 
-	// 创建客户端
+	// Create client
 	client, err := powermem.NewClient(config)
 	if err != nil {
 		log.Fatalf("Failed to create client: %v", err)
@@ -90,7 +90,7 @@ func main() {
 	fmt.Printf("✓ Added: %s (ID: %d)\n", memory3.Content, memory3.ID)
 	fmt.Println("✓ Memories added!")
 
-	// 搜索记忆
+	// Search memories
 	fmt.Println("Searching memories...")
 	results, err := client.Search(ctx, "user preferences",
 		powermem.WithUserIDForSearch(userID),
@@ -105,7 +105,7 @@ func main() {
 		fmt.Printf("  %d. [Score: %.3f] %s\n", i+1, mem.Score, mem.Content)
 	}
 
-	// 获取所有记忆
+	// Get all memories
 	fmt.Println("\nGetting all memories...")
 	allMemories, err := client.GetAll(ctx,
 		powermem.WithUserIDForGetAll(userID),

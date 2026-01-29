@@ -223,14 +223,43 @@ func (c *Client) Add(ctx context.Context, content string, opts ...AddOption) (*M
 	default:
 	}
 
+	// If Infer is enabled and intelligent manager is available, use IntelligentAdd
+	// This provides the complete intelligent flow: fact extraction -> search -> LLM decision -> execute
+	if addOpts.Infer && c.intelligentManager != nil && c.llm != nil {
+		// Unlock before calling IntelligentAdd (it will acquire the lock itself)
+		c.mu.Unlock()
+		result, err := c.IntelligentAdd(ctx, content, opts...)
+		c.mu.Lock()
+		
+		if err != nil {
+			// If IntelligentAdd fails and fallback is not enabled, return error
+			if c.config.Intelligence == nil || !c.config.Intelligence.FallbackToSimpleAdd {
+				return nil, NewMemoryError("Add", err)
+			}
+			// Otherwise, continue with simple add below
+		} else if len(result.Results) > 0 {
+			// Return the first result as a Memory object
+			// (IntelligentAdd may create multiple memories, but Add returns one)
+			firstResult := result.Results[0]
+			return &Memory{
+				ID:      firstResult.ID,
+				Content: firstResult.Memory,
+				UserID:  addOpts.UserID,
+				AgentID: addOpts.AgentID,
+			}, nil
+		}
+		// If no results from IntelligentAdd, fall through to simple add
+	}
+
 	// Generate embedding
 	embedding, err := c.embedder.Embed(ctx, content)
 	if err != nil {
 		return nil, NewMemoryError("Add", err)
 	}
 
-	// Intelligent deduplication (if enabled)
-	if addOpts.Infer && c.dedupManager != nil {
+	// Legacy deduplication logic (kept for backward compatibility)
+	// This is simpler than IntelligentAdd and only does basic similarity checking
+	if addOpts.Infer && c.dedupManager != nil && c.intelligentManager == nil {
 		isDup, existingID, err := c.dedupManager.CheckDuplicate(ctx, embedding, addOpts.UserID, addOpts.AgentID)
 		if err != nil {
 			return nil, NewMemoryError("Add", err)
@@ -329,11 +358,13 @@ func (c *Client) Search(ctx context.Context, query string, opts ...SearchOption)
 
 	// Execute vector similarity search
 	storageOpts := &storage.SearchOptions{
-		UserID:   searchOpts.UserID,
-		AgentID:  searchOpts.AgentID,
-		Limit:    searchOpts.Limit,
-		MinScore: searchOpts.MinScore,
-		Filters:  searchOpts.Filters,
+		UserID:    searchOpts.UserID,
+		AgentID:   searchOpts.AgentID,
+		Limit:     searchOpts.Limit,
+		MinScore:  searchOpts.MinScore,
+		Threshold: searchOpts.MinScore, // Python SDK compatibility
+		Query:     query,                // Pass original query for future hybrid search
+		Filters:   searchOpts.Filters,
 	}
 
 	memories, err := c.storage.Search(ctx, queryEmbedding, storageOpts)
@@ -341,21 +372,56 @@ func (c *Client) Search(ctx context.Context, query string, opts ...SearchOption)
 		return nil, NewMemoryError("Search", err)
 	}
 
-	return fromStorageMemories(memories), nil
+	coreMemories := fromStorageMemories(memories)
+
+	// Apply intelligent processing if enabled
+	if c.config.Intelligence != nil && c.config.Intelligence.Enabled && c.intelligentManager != nil {
+		// Convert to map format for ProcessSearchResults
+		resultsMap := memoriesToMaps(coreMemories)
+
+		// Process with Ebbinghaus decay and re-ranking
+		processedResults := c.intelligentManager.ProcessSearchResults(ctx, resultsMap, query)
+
+		// Convert back to Memory format
+		coreMemories = mapsToMemories(processedResults)
+	}
+
+	return coreMemories, nil
 }
 
-// Get retrieves a memory by its ID.
+// Get retrieves a memory by its ID with optional access control.
 //
 // Parameters:
 //   - ctx: Context for cancellation
 //   - id: Memory ID
+//   - opts: Optional Get options for access control (UserID, AgentID)
 //
-// Returns the Memory if found, or an error if not found or retrieval fails.
-func (c *Client) Get(ctx context.Context, id int64) (*Memory, error) {
+// Returns the Memory if found and access is granted, or an error otherwise.
+//
+// Example:
+//
+//	// Get without access control
+//	memory, err := client.Get(ctx, memoryID)
+//
+//	// Get with user access control (multi-tenant)
+//	memory, err := client.Get(ctx, memoryID, core.WithUserIDForGet("user_001"))
+//
+//	// Get with both user and agent access control
+//	memory, err := client.Get(ctx, memoryID,
+//	    core.WithUserIDForGet("user_001"),
+//	    core.WithAgentIDForGet("agent_001"))
+func (c *Client) Get(ctx context.Context, id int64, opts ...GetOption) (*Memory, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	memory, err := c.storage.Get(ctx, id)
+	getOpts := applyGetOptions(opts)
+
+	storageOpts := &storage.GetOptions{
+		UserID:  getOpts.UserID,
+		AgentID: getOpts.AgentID,
+	}
+
+	memory, err := c.storage.Get(ctx, id, storageOpts)
 	if err != nil {
 		return nil, NewMemoryError("Get", err)
 	}
@@ -363,21 +429,33 @@ func (c *Client) Get(ctx context.Context, id int64) (*Memory, error) {
 	return fromStorageMemory(memory), nil
 }
 
-// Update updates an existing memory's content.
+// Update updates an existing memory's content with optional access control.
 //
 // The method:
 //  1. Generates a new embedding vector for the updated content
-//  2. Updates the memory in the store
+//  2. Updates the memory in the store (with access control if specified)
 //
 // Parameters:
 //   - ctx: Context for cancellation
 //   - id: Memory ID to update
 //   - content: New content for the memory
+//   - opts: Optional Update options for access control (UserID, AgentID)
 //
-// Returns the updated Memory, or an error if update fails.
-func (c *Client) Update(ctx context.Context, id int64, content string) (*Memory, error) {
+// Returns the updated Memory, or an error if update fails or access is denied.
+//
+// Example:
+//
+//	// Update without access control
+//	memory, err := client.Update(ctx, memoryID, "new content")
+//
+//	// Update with user access control (prevents cross-tenant updates)
+//	memory, err := client.Update(ctx, memoryID, "new content",
+//	    core.WithUserIDForUpdate("user_001"))
+func (c *Client) Update(ctx context.Context, id int64, content string, opts ...UpdateOption) (*Memory, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+
+	updateOpts := applyUpdateOptions(opts)
 
 	// Generate new embedding
 	embedding, err := c.embedder.Embed(ctx, content)
@@ -385,8 +463,13 @@ func (c *Client) Update(ctx context.Context, id int64, content string) (*Memory,
 		return nil, NewMemoryError("Update", err)
 	}
 
+	storageOpts := &storage.UpdateOptions{
+		UserID:  updateOpts.UserID,
+		AgentID: updateOpts.AgentID,
+	}
+
 	// Update storage
-	memory, err := c.storage.Update(ctx, id, content, embedding)
+	memory, err := c.storage.Update(ctx, id, content, embedding, storageOpts)
 	if err != nil {
 		return nil, NewMemoryError("Update", err)
 	}
@@ -394,18 +477,34 @@ func (c *Client) Update(ctx context.Context, id int64, content string) (*Memory,
 	return fromStorageMemory(memory), nil
 }
 
-// Delete deletes a memory by its ID.
+// Delete deletes a memory by its ID with optional access control.
 //
 // Parameters:
 //   - ctx: Context for cancellation
 //   - id: Memory ID to delete
+//   - opts: Optional Delete options for access control (UserID, AgentID)
 //
-// Returns an error if deletion fails.
-func (c *Client) Delete(ctx context.Context, id int64) error {
+// Returns an error if deletion fails or access is denied.
+//
+// Example:
+//
+//	// Delete without access control
+//	err := client.Delete(ctx, memoryID)
+//
+//	// Delete with user access control (prevents cross-tenant deletions)
+//	err := client.Delete(ctx, memoryID, core.WithUserIDForDelete("user_001"))
+func (c *Client) Delete(ctx context.Context, id int64, opts ...DeleteOption) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	if err := c.storage.Delete(ctx, id); err != nil {
+	deleteOpts := applyDeleteOptions(opts)
+
+	storageOpts := &storage.DeleteOptions{
+		UserID:  deleteOpts.UserID,
+		AgentID: deleteOpts.AgentID,
+	}
+
+	if err := c.storage.Delete(ctx, id, storageOpts); err != nil {
 		return NewMemoryError("Delete", err)
 	}
 

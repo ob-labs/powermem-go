@@ -16,7 +16,7 @@ func main() {
 	fmt.Println("PowerMem Go SDK - Async Usage Example")
 	fmt.Println("=" + repeat("=", 59))
 
-	// 查找配置文件
+	// Find config file
 	envPath, found := powermem.FindEnvFile()
 	if !found {
 		fmt.Println("\n⚠️  No .env file found!")
@@ -32,14 +32,14 @@ func main() {
 		}
 	}
 
-	// 加载配置
+	// Load configuration
 	fmt.Println("\nInitializing async memory...")
 	config, err := powermem.LoadConfigFromEnv()
 	if err != nil {
 		log.Fatalf("Failed to load config: %v", err)
 	}
 
-	// 创建异步客户端
+	// Create async client
 	asyncClient, err := powermem.NewAsyncClient(config)
 	if err != nil {
 		log.Fatalf("Failed to create async client: %v", err)
@@ -55,7 +55,7 @@ func main() {
 	ctx := context.Background()
 	userID := "user123"
 
-	// 示例 1: 并发添加多个记忆
+	// Example 1: Concurrently adding multiple memories
 	fmt.Println("Example 1: Concurrently adding multiple memories...")
 	contents := []string{
 		"User likes coffee",
@@ -82,7 +82,7 @@ func main() {
 
 	wg.Wait()
 
-	// 检查结果
+	// Check results
 	for i, content := range contents {
 		if errors[i] != nil {
 			log.Printf("Failed to add memory %d: %v", i, errors[i])
@@ -91,7 +91,7 @@ func main() {
 		}
 	}
 
-	// 示例 2: 并发搜索
+	// Example 2: Concurrently searching for memories
 	fmt.Println("\nExample 2: Concurrently searching for memories...")
 	queries := []string{
 		"programming language",
@@ -119,7 +119,7 @@ func main() {
 
 	wg.Wait()
 
-	// 显示搜索结果
+	// Display search results
 	for i, query := range queries {
 		if searchErrors[i] != nil {
 			log.Printf("Failed to search for '%s': %v", query, searchErrors[i])
@@ -127,7 +127,7 @@ func main() {
 			fmt.Printf("\nQuery: '%s'\n", query)
 			fmt.Printf("Found %d results:\n", len(searchResults[i]))
 			for j, mem := range searchResults[i] {
-				if j >= 3 { // 只显示前 3 个
+				if j >= 3 { // Show only first 3 results
 					break
 				}
 				fmt.Printf("  %d. %s (ID: %d, Score: %.4f)\n", j+1, mem.Content, mem.ID, mem.Score)
@@ -135,7 +135,7 @@ func main() {
 		}
 	}
 
-	// 示例 3: 使用 select 和 timeout
+	// Example 3: Using select with timeout
 	fmt.Println("\nExample 3: Using select with timeout...")
 	ctxWithTimeout, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
@@ -155,10 +155,10 @@ func main() {
 		fmt.Println("⚠️  Search timed out")
 	}
 
-	// 示例 4: 批量操作
+	// Example 4: Batch operations
 	fmt.Println("\nExample 4: Batch operations...")
 	if len(memories) > 0 {
-		// 并发获取多个记忆
+		// Concurrently get multiple memories
 		getResults := make([]*powermem.Memory, len(memories))
 		getErrors := make([]error, len(memories))
 

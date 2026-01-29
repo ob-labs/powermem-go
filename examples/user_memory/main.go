@@ -73,7 +73,7 @@ func main() {
 	}
 
 	// Example 1: Add conversation and extract user profile
-	fmt.Println("\n=== 示例 1: 添加对话并提取用户画像 ===")
+	fmt.Println("\n=== Example 1: Add conversation and extract user profile ===")
 	conversation := []map[string]interface{}{
 		{
 			"role":    "user",
@@ -93,30 +93,30 @@ func main() {
 		log.Fatalf("Failed to add conversation: %v", err)
 	}
 
-	fmt.Printf("✓ 对话已添加，记忆 ID: %d\n", result.Memory.ID)
-	fmt.Printf("✓ 画像提取状态: %v\n", result.ProfileExtracted)
+	fmt.Printf("✓ Conversation added, Memory ID: %d\n", result.Memory.ID)
+	fmt.Printf("✓ Profile extraction status: %v\n", result.ProfileExtracted)
 	if result.ProfileContent != nil {
-		fmt.Printf("✓ 提取的画像内容: %s\n", *result.ProfileContent)
+		fmt.Printf("✓ Extracted profile content: %s\n", *result.ProfileContent)
 	}
 
-	// 示例 2: 获取用户画像
-	fmt.Println("\n=== 示例 2: 获取用户画像 ===")
+	// Example 2: Get user profile
+	fmt.Println("\n=== Example 2: Get user profile ===")
 	profile, err := client.GetProfile(ctx, "user_001")
 	if err != nil {
 		log.Fatalf("Failed to get profile: %v", err)
 	}
 
 	if profile != nil {
-		fmt.Printf("✓ 用户 ID: %s\n", profile.UserID)
-		fmt.Printf("✓ 画像内容: %s\n", profile.ProfileContent)
-		fmt.Printf("✓ 创建时间: %s\n", profile.CreatedAt.Format("2006-01-02 15:04:05"))
-		fmt.Printf("✓ 更新时间: %s\n", profile.UpdatedAt.Format("2006-01-02 15:04:05"))
+		fmt.Printf("✓ User ID: %s\n", profile.UserID)
+		fmt.Printf("✓ Profile content: %s\n", profile.ProfileContent)
+		fmt.Printf("✓ Created at: %s\n", profile.CreatedAt.Format("2006-01-02 15:04:05"))
+		fmt.Printf("✓ Updated at: %s\n", profile.UpdatedAt.Format("2006-01-02 15:04:05"))
 	} else {
-		fmt.Println("未找到用户画像")
+		fmt.Println("User profile not found")
 	}
 
-	// 示例 3: 更新用户画像（通过添加新对话）
-	fmt.Println("\n=== 示例 3: 更新用户画像 ===")
+	// Example 3: Update user profile (by adding new conversation)
+	fmt.Println("\n=== Example 3: Update user profile ===")
 	newConversation := []map[string]interface{}{
 		{
 			"role":    "user",
@@ -131,20 +131,20 @@ func main() {
 		log.Fatalf("Failed to update profile: %v", err)
 	}
 
-	fmt.Printf("✓ 画像更新状态: %v\n", updateResult.ProfileExtracted)
+	fmt.Printf("✓ Profile update status: %v\n", updateResult.ProfileExtracted)
 
-	// 获取更新后的画像
+	// Get updated profile
 	updatedProfile, err := client.GetProfile(ctx, "user_001")
 	if err != nil {
 		log.Fatalf("Failed to get updated profile: %v", err)
 	}
 
 	if updatedProfile != nil {
-		fmt.Printf("✓ 更新后的画像内容: %s\n", updatedProfile.ProfileContent)
+		fmt.Printf("✓ Updated profile content: %s\n", updatedProfile.ProfileContent)
 	}
 
-	// 示例 4: 搜索记忆
-	fmt.Println("\n=== 示例 4: 搜索记忆 ===")
+	// Example 4: Search memories
+	fmt.Println("\n=== Example 4: Search memories ===")
 	searchResult, err := client.Search(ctx, "programming",
 		usermemory.WithSearchUserID("user_001"),
 		usermemory.WithSearchLimit(5),
@@ -153,25 +153,25 @@ func main() {
 		log.Fatalf("Failed to search: %v", err)
 	}
 
-	fmt.Printf("✓ 找到 %d 条相关记忆\n", len(searchResult.Memories))
+	fmt.Printf("✓ Found %d related memories\n", len(searchResult.Memories))
 	for i, mem := range searchResult.Memories {
 		fmt.Printf("  %d. %s (ID: %d)\n", i+1, mem.Content, mem.ID)
 	}
 
-	// 示例 5: 获取单个记忆
-	fmt.Println("\n=== 示例 5: 获取单个记忆 ===")
+	// Example 5: Get single memory
+	fmt.Println("\n=== Example 5: Get single memory ===")
 	if len(searchResult.Memories) > 0 {
 		memoryID := searchResult.Memories[0].ID
 		memory, err := client.Get(ctx, memoryID)
 		if err != nil {
 			log.Fatalf("Failed to get memory: %v", err)
 		}
-		fmt.Printf("✓ 获取记忆 ID: %d\n", memory.ID)
-		fmt.Printf("  内容: %s\n", memory.Content)
+		fmt.Printf("✓ Got memory ID: %d\n", memory.ID)
+		fmt.Printf("  Content: %s\n", memory.Content)
 	}
 
-	// 示例 6: 更新记忆
-	fmt.Println("\n=== 示例 6: 更新记忆 ===")
+	// Example 6: Update memory
+	fmt.Println("\n=== Example 6: Update memory ===")
 	if len(searchResult.Memories) > 0 {
 		memoryID := searchResult.Memories[0].ID
 		updatedContent := "I'm Alice, a software engineer. I love Python and Go programming, and I enjoy reading science fiction."
@@ -179,30 +179,30 @@ func main() {
 		if err != nil {
 			log.Fatalf("Failed to update memory: %v", err)
 		}
-		fmt.Printf("✓ 记忆已更新 (ID: %d)\n", updated.ID)
-		fmt.Printf("  新内容: %s\n", updated.Content)
+		fmt.Printf("✓ Memory updated (ID: %d)\n", updated.ID)
+		fmt.Printf("  New content: %s\n", updated.Content)
 	}
 
-	// 示例 7: 查询重写功能（如果启用）
+	// Example 7: Query rewrite feature (if enabled)
 	if queryRewriteEnabled {
-		fmt.Println("\n=== 示例 7: 查询重写功能 ===")
-		// 使用模糊查询，应该会被重写为更具体的查询
+		fmt.Println("\n=== Example 7: Query rewrite feature ===")
+		// Use vague query, should be rewritten to more specific query
 		rewriteResult, err := client.Search(ctx, "my work",
 			usermemory.WithSearchUserID("user_001"),
 			usermemory.WithSearchLimit(5),
-			usermemory.WithAddProfile(true), // 同时获取用户画像
+			usermemory.WithAddProfile(true), // Also get user profile
 		)
 		if err != nil {
 			log.Fatalf("Failed to search with query rewrite: %v", err)
 		}
-		fmt.Printf("✓ 查询重写后的搜索结果: 找到 %d 条记忆\n", len(rewriteResult.Memories))
+		fmt.Printf("✓ Search results after query rewrite: Found %d memories\n", len(rewriteResult.Memories))
 		if rewriteResult.ProfileContent != nil {
-			fmt.Printf("✓ 用户画像已包含在结果中\n")
+			fmt.Printf("✓ User profile included in results\n")
 		}
 	}
 
-	// 示例 8: 获取所有记忆
-	fmt.Println("\n=== 示例 8: 获取所有记忆 ===")
+	// Example 8: Get all memories
+	fmt.Println("\n=== Example 8: Get all memories ===")
 	allMemories, err := client.GetAll(ctx,
 		usermemory.WithGetAllUserID("user_001"),
 		usermemory.WithGetAllLimit(10),
@@ -210,39 +210,39 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to get all memories: %v", err)
 	}
-	fmt.Printf("✓ 获取到 %d 条记忆\n", len(allMemories))
+	fmt.Printf("✓ Got %d memories\n", len(allMemories))
 
-	// 示例 8: 删除记忆（不删除画像）
-	fmt.Println("\n=== 示例 8: 删除记忆 ===")
+	// Example 8: Delete memory (without deleting profile)
+	fmt.Println("\n=== Example 8: Delete memory ===")
 	if len(allMemories) > 0 {
 		memoryID := allMemories[0].ID
 		err = client.Delete(ctx, memoryID)
 		if err != nil {
 			log.Fatalf("Failed to delete memory: %v", err)
 		}
-		fmt.Printf("✓ 记忆已删除 (ID: %d)\n", memoryID)
+		fmt.Printf("✓ Memory deleted (ID: %d)\n", memoryID)
 
-		// 验证删除
+		// Verify deletion
 		_, err = client.Get(ctx, memoryID)
 		if err != nil {
-			fmt.Println("✓ 验证：记忆已成功删除")
+			fmt.Println("✓ Verification: Memory successfully deleted")
 		}
 	}
 
-	// 示例 9: 删除所有记忆（可选择同时删除画像）
-	fmt.Println("\n=== 示例 9: 删除所有记忆 ===")
-	// 注意：这里不实际删除，只是演示用法
-	fmt.Println("  用法示例：")
+	// Example 9: Delete all memories (optionally delete profile too)
+	fmt.Println("\n=== Example 9: Delete all memories ===")
+	// Note: Not actually deleting here, just demonstrating usage
+	fmt.Println("  Usage example:")
 	fmt.Println("  client.DeleteAll(ctx,")
 	fmt.Println("    usermemory.WithDeleteAllUserID(\"user_001\"),")
-	fmt.Println("    usermemory.WithDeleteAllProfile(true), // 同时删除画像")
+	fmt.Println("    usermemory.WithDeleteAllProfile(true), // Also delete profile")
 	fmt.Println("  )")
 
-	// 示例 10: 重置存储
-	fmt.Println("\n=== 示例 10: 重置存储 ===")
-	fmt.Println("  用法示例：")
-	fmt.Println("  client.Reset(ctx) // 删除所有记忆")
-	fmt.Println("  注意：Reset 会删除所有记忆，但不会删除用户画像")
+	// Example 10: Reset storage
+	fmt.Println("\n=== Example 10: Reset storage ===")
+	fmt.Println("  Usage example:")
+	fmt.Println("  client.Reset(ctx) // Delete all memories")
+	fmt.Println("  Note: Reset will delete all memories, but not user profiles")
 
-	fmt.Println("\n✓ 所有示例执行完成！")
+	fmt.Println("\n✓ All examples completed!")
 }

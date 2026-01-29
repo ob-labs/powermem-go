@@ -138,11 +138,38 @@ func (c *Client) Insert(ctx context.Context, memory *storage.Memory) error {
 }
 
 // Search performs vector search.
-// Compatible with Python SDK: uses 'document' field
+//
+// Compatible with Python SDK: uses 'document' field for content storage.
+//
+// The method supports hybrid search parameters for future enhancement:
+//   - opts.Query: Original query text (reserved for full-text search)
+//   - opts.SparseEmbedding: Sparse vector (reserved for hybrid retrieval)
+//   - opts.Threshold: Minimum similarity score (alias for MinScore)
+//
+// Currently, only vector similarity search is implemented using OceanBase's cosine_distance.
+// Hybrid search (vector + full-text + sparse) will be added in future versions when
+// OceanBase supports additional retrieval modes.
 func (c *Client) Search(ctx context.Context, embedding []float64, opts *storage.SearchOptions) ([]*storage.Memory, error) {
+	// Use Threshold if MinScore is not set (Python SDK compatibility)
+	minScore := opts.MinScore
+	if minScore == 0 && opts.Threshold > 0 {
+		minScore = opts.Threshold
+	}
+
 	queryVectorStr := vectorToString(embedding)
 
 	whereClause, args := buildWhereClause(opts.UserID, opts.AgentID, opts.Filters)
+
+	// Add similarity threshold filter if specified
+	if minScore > 0 {
+		if whereClause == "" {
+			whereClause = "WHERE 1 - cosine_distance(embedding, ?) >= ?"
+		} else {
+			whereClause += " AND 1 - cosine_distance(embedding, ?) >= ?"
+		}
+		// Note: We'll add queryVectorStr to args twice (once for distance calc, once for threshold check)
+		args = append(args, queryVectorStr, minScore)
+	}
 
 	query := fmt.Sprintf(`
 		SELECT 
@@ -155,9 +182,24 @@ func (c *Client) Search(ctx context.Context, embedding []float64, opts *storage.
 		LIMIT ?
 	`, c.collectionName, whereClause)
 
-	// Add query vector to the beginning of parameter list
-	allArgs := append([]interface{}{queryVectorStr}, args...)
+	// Build args: query vector (for SELECT and distance), then filter args, then limit
+	allArgs := []interface{}{queryVectorStr}
+	allArgs = append(allArgs, args...)
 	allArgs = append(allArgs, opts.Limit)
+
+	// TODO: Future enhancement - add full-text search support using opts.Query
+	// This would enable hybrid retrieval combining vector similarity and keyword matching
+	// if opts.Query != "" {
+	//     // Add full-text search condition to WHERE clause
+	//     // Combine vector distance with text relevance scoring
+	// }
+
+	// TODO: Future enhancement - add sparse embedding support using opts.SparseEmbedding
+	// This would enable sparse + dense hybrid retrieval
+	// if opts.SparseEmbedding != nil {
+	//     // Calculate sparse similarity
+	//     // Combine with dense vector score
+	// }
 
 	rows, err := c.db.QueryContext(ctx, query, allArgs...)
 	if err != nil {
@@ -168,21 +210,38 @@ func (c *Client) Search(ctx context.Context, embedding []float64, opts *storage.
 	return c.scanMemories(rows, true)
 }
 
-// Get retrieves a memory by ID.
+// Get retrieves a memory by ID with optional access control.
 // Compatible with Python SDK: uses 'document' field
-func (c *Client) Get(ctx context.Context, id int64) (*storage.Memory, error) {
+func (c *Client) Get(ctx context.Context, id int64, opts *storage.GetOptions) (*storage.Memory, error) {
+	if opts == nil {
+		opts = &storage.GetOptions{}
+	}
+
+	// Build WHERE clause with access control
+	whereClause := "WHERE id = ?"
+	args := []interface{}{id}
+
+	if opts.UserID != "" {
+		whereClause += " AND user_id = ?"
+		args = append(args, opts.UserID)
+	}
+	if opts.AgentID != "" {
+		whereClause += " AND agent_id = ?"
+		args = append(args, opts.AgentID)
+	}
+
 	query := fmt.Sprintf(`
 		SELECT id, user_id, agent_id, run_id, document, embedding, metadata,
 		       created_at, updated_at, hash
 		FROM %s
-		WHERE id = ?
-	`, c.collectionName)
+		%s
+	`, c.collectionName, whereClause)
 
-	row := c.db.QueryRowContext(ctx, query, id)
+	row := c.db.QueryRowContext(ctx, query, args...)
 
 	memory, err := c.scanMemory(row)
 	if err == sql.ErrNoRows {
-		return nil, fmt.Errorf("Get: not found")
+		return nil, fmt.Errorf("Get: not found or access denied")
 	}
 	if err != nil {
 		return nil, fmt.Errorf("Get: %w", err)
@@ -191,20 +250,37 @@ func (c *Client) Get(ctx context.Context, id int64) (*storage.Memory, error) {
 	return memory, nil
 }
 
-// Update updates a memory.
+// Update updates a memory with optional access control.
 // Compatible with Python SDK: uses 'document' field
-func (c *Client) Update(ctx context.Context, id int64, content string, embedding []float64) (*storage.Memory, error) {
+func (c *Client) Update(ctx context.Context, id int64, content string, embedding []float64, opts *storage.UpdateOptions) (*storage.Memory, error) {
+	if opts == nil {
+		opts = &storage.UpdateOptions{}
+	}
+
 	vectorStr := vectorToString(embedding)
 	hash := generateHash(content)
 	now := time.Now().Format(time.RFC3339)
 
+	// Build WHERE clause with access control
+	whereClause := "WHERE id = ?"
+	args := []interface{}{content, vectorStr, now, hash, id}
+
+	if opts.UserID != "" {
+		whereClause += " AND user_id = ?"
+		args = append(args, opts.UserID)
+	}
+	if opts.AgentID != "" {
+		whereClause += " AND agent_id = ?"
+		args = append(args, opts.AgentID)
+	}
+
 	query := fmt.Sprintf(`
 		UPDATE %s
 		SET document = ?, embedding = ?, updated_at = ?, hash = ?
-		WHERE id = ?
-	`, c.collectionName)
+		%s
+	`, c.collectionName, whereClause)
 
-	result, err := c.db.ExecContext(ctx, query, content, vectorStr, now, hash, id)
+	result, err := c.db.ExecContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("Update: %w", err)
 	}
@@ -215,18 +291,38 @@ func (c *Client) Update(ctx context.Context, id int64, content string, embedding
 	}
 
 	if rowsAffected == 0 {
-		return nil, fmt.Errorf("Update: not found")
+		return nil, fmt.Errorf("Update: not found or access denied")
 	}
 
 	// Return updated memory
-	return c.Get(ctx, id)
+	return c.Get(ctx, id, &storage.GetOptions{
+		UserID:  opts.UserID,
+		AgentID: opts.AgentID,
+	})
 }
 
-// Delete deletes a memory.
-func (c *Client) Delete(ctx context.Context, id int64) error {
-	query := fmt.Sprintf("DELETE FROM %s WHERE id = ?", c.collectionName)
+// Delete deletes a memory with optional access control.
+func (c *Client) Delete(ctx context.Context, id int64, opts *storage.DeleteOptions) error {
+	if opts == nil {
+		opts = &storage.DeleteOptions{}
+	}
 
-	result, err := c.db.ExecContext(ctx, query, id)
+	// Build WHERE clause with access control
+	whereClause := "WHERE id = ?"
+	args := []interface{}{id}
+
+	if opts.UserID != "" {
+		whereClause += " AND user_id = ?"
+		args = append(args, opts.UserID)
+	}
+	if opts.AgentID != "" {
+		whereClause += " AND agent_id = ?"
+		args = append(args, opts.AgentID)
+	}
+
+	query := fmt.Sprintf("DELETE FROM %s %s", c.collectionName, whereClause)
+
+	result, err := c.db.ExecContext(ctx, query, args...)
 	if err != nil {
 		return fmt.Errorf("Delete: %w", err)
 	}
@@ -237,7 +333,7 @@ func (c *Client) Delete(ctx context.Context, id int64) error {
 	}
 
 	if rowsAffected == 0 {
-		return fmt.Errorf("Delete: not found")
+		return fmt.Errorf("Delete: not found or access denied")
 	}
 
 	return nil

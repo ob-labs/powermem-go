@@ -141,14 +141,23 @@ type VectorStore interface {
 	// Returns matching memories sorted by similarity (highest first).
 	Search(ctx context.Context, embedding []float64, opts *SearchOptions) ([]*Memory, error)
 
-	// Get retrieves a memory by ID.
-	Get(ctx context.Context, id int64) (*Memory, error)
+	// Get retrieves a memory by ID with optional access control.
+	//
+	// If opts.UserID or opts.AgentID is specified, the memory will only be returned
+	// if it matches the specified user/agent (multi-tenant isolation).
+	Get(ctx context.Context, id int64, opts *GetOptions) (*Memory, error)
 
-	// Update updates a memory's content and embedding.
-	Update(ctx context.Context, id int64, content string, embedding []float64) (*Memory, error)
+	// Update updates a memory's content and embedding with optional access control.
+	//
+	// If opts.UserID or opts.AgentID is specified, the update will only succeed
+	// if the memory belongs to the specified user/agent (access control).
+	Update(ctx context.Context, id int64, content string, embedding []float64, opts *UpdateOptions) (*Memory, error)
 
-	// Delete deletes a memory by ID.
-	Delete(ctx context.Context, id int64) error
+	// Delete deletes a memory by ID with optional access control.
+	//
+	// If opts.UserID or opts.AgentID is specified, the delete will only succeed
+	// if the memory belongs to the specified user/agent (access control).
+	Delete(ctx context.Context, id int64, opts *DeleteOptions) error
 
 	// GetAll retrieves all memories with optional filtering and pagination.
 	GetAll(ctx context.Context, opts *GetAllOptions) ([]*Memory, error)
@@ -175,10 +184,68 @@ type SearchOptions struct {
 	Limit int
 
 	// MinScore sets the minimum similarity score for results.
+	// This is the same as Threshold for backward compatibility.
 	MinScore float64
+
+	// Threshold sets the minimum similarity score for results.
+	// This is an alias for MinScore, following Python SDK naming.
+	// If both are set, the higher value is used.
+	Threshold float64
+
+	// Query is the original query text for hybrid search.
+	// When provided, implementations can use it for:
+	//   - Full-text search (keyword matching)
+	//   - Sparse embedding generation
+	//   - Hybrid retrieval (vector + text + sparse)
+	// If empty, only vector search is performed.
+	Query string
+
+	// SparseEmbedding is the sparse embedding for hybrid search.
+	// When provided together with dense embedding, implementations
+	// can perform hybrid retrieval combining both representations.
+	SparseEmbedding map[int]float64
 
 	// Filters provides additional metadata filters.
 	Filters map[string]interface{}
+}
+
+// GetOptions contains options for get operations with access control.
+type GetOptions struct {
+	// UserID restricts access to memories belonging to this user.
+	// If specified, Get will return an error if the memory's UserID doesn't match.
+	// This enables multi-tenant isolation.
+	UserID string
+
+	// AgentID restricts access to memories belonging to this agent.
+	// If specified, Get will return an error if the memory's AgentID doesn't match.
+	// This enables agent-level access control.
+	AgentID string
+}
+
+// UpdateOptions contains options for update operations with access control.
+type UpdateOptions struct {
+	// UserID restricts updates to memories belonging to this user.
+	// If specified, Update will fail if the memory's UserID doesn't match.
+	// This prevents unauthorized modifications across tenants.
+	UserID string
+
+	// AgentID restricts updates to memories belonging to this agent.
+	// If specified, Update will fail if the memory's AgentID doesn't match.
+	// This prevents unauthorized modifications across agents.
+	AgentID string
+}
+
+// DeleteOptions contains options for delete operations with access control.
+type DeleteOptions struct {
+	// UserID restricts deletions to memories belonging to this user.
+	// If specified, Delete will fail if the memory's UserID doesn't match.
+	// This prevents unauthorized deletions across tenants.
+	UserID string
+
+	// AgentID restricts deletions to memories belonging to this agent.
+	// If specified, Delete will fail if the memory's AgentID doesn't match.
+	// This prevents unauthorized deletions across agents.
+	AgentID string
 }
 
 // GetAllOptions contains options for GetAll operations.

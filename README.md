@@ -1,22 +1,6 @@
 # PowerMem Go SDK
 
-<p align="center">
-    <a href="https://github.com/oceanbase/powermem">
-        <img alt="PowerMem" src="../../docs/images/powermem_en.png" width="60%" />
-    </a>
-</p>
-
-<p align="center">
-    <a href="https://pkg.go.dev/github.com/oceanbase/powermem-go">
-        <img src="https://pkg.go.dev/badge/github.com/oceanbase/powermem-go.svg" alt="Go Reference">
-    </a>
-    <a href="https://github.com/oceanbase/powermem/blob/master/LICENSE">
-        <img alt="license" src="https://img.shields.io/badge/license-Apache%202.0-green.svg" />
-    </a>
-    <img alt="Go version" src="https://img.shields.io/badge/go-%3E%3D1.19-blue.svg" />
-</p>
-
-Official Go SDK for [PowerMem](https://github.com/oceanbase/powermem) - an intelligent memory system for AI applications. PowerMem enables large language models to persistently "remember" historical conversations, user preferences, and contextual information through a hybrid storage architecture combining vector retrieval, full-text search, and graph databases.
+Official Go SDK for [PowerMem](https://github.com/oceanbase/powermem).
 
 ## ✨ Features
 
@@ -41,7 +25,7 @@ go get github.com/oceanbase/powermem-go
 
 - Go 1.19 or higher
 - API keys for LLM and embedding providers (OpenAI, Qwen, etc.)
-- Vector database (SQLite for local development, OceanBase/PostgreSQL for production)
+- Vector database (SQLite/OceanBase/PostgreSQL)
 
 ### Basic Usage
 
@@ -65,7 +49,7 @@ VECTOR_STORE_PROVIDER=sqlite
 VECTOR_STORE_COLLECTION_NAME=memories
 ```
 
-1. **Use the SDK**:
+2. **Use the SDK**:
 
 ```go
 package main
@@ -122,32 +106,18 @@ func main() {
 
 ## 📚 Documentation
 
-### Core Concepts
-
 - **[API Reference](docs/api.md)** - Complete API documentation
-- **[Configuration Guide](../../docs/guides/0003-configuration.md)** - Detailed configuration options
+
 - **[Examples](examples/)** - Working code examples for various scenarios
-
-### Examples
-
-Explore the [examples](examples/) directory for complete working examples:
-
-- **[Basic Usage](examples/basic/)** - Simple memory operations (add, search, get, update, delete)
-- **[Advanced Usage](examples/advanced/)** - Intelligent memory with fact extraction and deduplication
-- **[Async Operations](examples/async/)** - High-performance async memory operations
-- **[Multi-Agent](examples/multi_agent/)** - Agent isolation and memory sharing
-- **[Streaming](examples/streaming/)** - Real-time streaming search results
-- **[Ebbinghaus Curve](examples/ebbinghaus/)** - Memory decay and review scheduling
-- **[User Memory](examples/user_memory/)** - User profile management and query rewriting
 
 ## 🔧 Configuration
 
 ### Environment Variables
 
-PowerMem supports automatic configuration loading from `.env` files. Copy [`.env.example`](../../.env.example) to `.env` and configure:
+PowerMem supports automatic configuration loading from `.env` files. Copy [`.env.example`](.env.example) to `.env` and configure.
 
 ```bash
-cp ../../.env.example .env
+cp .env.example .env
 ```
 
 ### Programmatic Configuration
@@ -201,14 +171,6 @@ Run tests:
 ```bash
 # Run all tests
 make test
-
-# Run specific test suite
-make test-core
-make test-storage
-make test-intelligence
-
-# Run with coverage
-make test-coverage
 ```
 
 ## 🛠️ Development
@@ -217,14 +179,8 @@ make test-coverage
 # Install dependencies
 make install
 
-# Format code
-make fmt
-
 # Run linter
 make lint
-
-# Run go vet
-make vet
 
 # Build project
 make build
@@ -232,16 +188,14 @@ make build
 # Build examples
 make examples
 
-# Run all checks (fmt, vet, lint, test)
-make check
 ```
 
 ## 📄 License
 
-Apache License 2.0. See [LICENSE](../../LICENSE) for details.
+Apache License 2.0. See [LICENSE](LICENSE) for details.
 
 ## 🔗 Links
 
 - **[Main Repository](https://github.com/oceanbase/powermem)** - Python SDK and documentation
 - **[OceanBase](https://github.com/oceanbase/oceanbase)** - Recommended production database
-- **[Documentation](../../docs/)** - Comprehensive guides and examples
+- **[Documentation](docs/)** - Comprehensive guides and examples

@@ -14,7 +14,7 @@ func main() {
 	fmt.Println("PowerMem Go SDK - Intelligent Memory Management Demo")
 	fmt.Println("=" + repeat("=", 79))
 
-	// 查找配置文件
+	// Find config file
 	envPath, found := powermem.FindEnvFile()
 	if !found {
 		fmt.Println("\n⚠️  No .env file found!")
@@ -30,14 +30,14 @@ func main() {
 		}
 	}
 
-	// 加载配置
+	// Load configuration
 	fmt.Println("\nLoading configuration...")
 	config, err := powermem.LoadConfigFromEnv()
 	if err != nil {
 		log.Fatalf("Failed to load config: %v", err)
 	}
 
-	// 启用智能记忆功能
+	// Enable intelligent memory features
 	config.Intelligence = &powermem.IntelligenceConfig{
 		Enabled:             true,
 		DecayRate:           0.1,
@@ -45,7 +45,7 @@ func main() {
 		DuplicateThreshold:  0.95,
 	}
 
-	// 创建客户端
+	// Create client
 	client, err := powermem.NewClient(config)
 	if err != nil {
 		log.Fatalf("Failed to create client: %v", err)
@@ -78,14 +78,14 @@ func main() {
 
 	memory1, err := client.Add(ctx, "User likes Python programming",
 		powermem.WithUserID(userID),
-		powermem.WithInfer(true), // 启用智能去重
+		powermem.WithInfer(true), // Enable intelligent deduplication
 	)
 	if err != nil {
 		log.Fatalf("Failed to add memory: %v", err)
 	}
 	fmt.Printf("✓ Added memory 1: ID=%d, Content=%s\n", memory1.ID, memory1.Content)
 
-	// 尝试添加相似的记忆（会被合并）
+	// Try to add similar memory (will be merged)
 	memory2, err := client.Add(ctx, "User enjoys Python coding",
 		powermem.WithUserID(userID),
 		powermem.WithInfer(true),
@@ -101,12 +101,12 @@ func main() {
 		fmt.Println("✗ Memories were considered different and stored separately")
 	}
 
-	// 场景 2: 多代理场景
+	// Scenario 2: Multi-Agent Scenario
 	fmt.Println("\n" + repeat("=", 80))
 	fmt.Println("SCENARIO 2: Multi-Agent Scenario")
 	fmt.Println(repeat("=", 80))
 
-	// Agent1 添加私有记忆
+	// Agent1 adds private memory
 	fmt.Println("\nAgent1 (Personal Assistant) adding private memory:")
 	agentMemory1, err := client.Add(ctx, "Agent1's private task: analyze user preferences",
 		powermem.WithUserID(userID),
@@ -118,7 +118,7 @@ func main() {
 	}
 	fmt.Printf("✓ Added: %s\n", agentMemory1.Content)
 
-	// Agent2 添加共享记忆
+	// Agent2 adds shared memory
 	fmt.Println("\nAgent2 (Task Manager) adding shared memory:")
 	agentMemory2, err := client.Add(ctx, "Shared knowledge: User prefers morning work sessions",
 		powermem.WithUserID(userID),
@@ -130,7 +130,7 @@ func main() {
 	}
 	fmt.Printf("✓ Added: %s (shared)\n", agentMemory2.Content)
 
-	// Agent1 搜索（只能看到自己的私有记忆）
+	// Agent1 searches (can only see its own private memory)
 	fmt.Println("\nAgent1 searching for 'task':")
 	agent1Results, err := client.Search(ctx, "task",
 		powermem.WithUserIDForSearch(userID),
@@ -145,12 +145,12 @@ func main() {
 		fmt.Printf("  - %s\n", mem.Content)
 	}
 
-	// 场景 3: 带过滤器的高级搜索
+	// Scenario 3: Advanced Search with Filters
 	fmt.Println("\n" + repeat("=", 80))
 	fmt.Println("SCENARIO 3: Advanced Search with Filters")
 	fmt.Println(repeat("=", 80))
 
-	// 添加带元数据的记忆
+	// Add memory with metadata
 	_, err = client.Add(ctx, "User completed Python course",
 		powermem.WithUserID(userID),
 		powermem.WithMetadata(map[string]interface{}{
@@ -164,7 +164,7 @@ func main() {
 	}
 	fmt.Println("✓ Added memory with metadata")
 
-	// 使用过滤器搜索
+	// Search with filters
 	fmt.Println("\nSearching with filters (type=achievement):")
 	filteredResults, err := client.Search(ctx, "Python",
 		powermem.WithUserIDForSearch(userID),
