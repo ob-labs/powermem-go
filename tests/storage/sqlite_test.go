@@ -250,3 +250,57 @@ func TestSQLiteClient_DeleteAll(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, 0, len(results))
 }
+
+func TestSQLiteClient_Reset(t *testing.T) {
+	store, cleanup := setupSQLiteTest(t)
+	defer cleanup()
+
+	ctx := context.Background()
+
+	// Insert some memories
+	for i := 1; i <= 3; i++ {
+		memory := &storage.Memory{
+			ID:        int64(i),
+			UserID:    "test_user",
+			AgentID:   "test_agent",
+			Content:   "Test memory content",
+			Embedding: []float64{0.1, 0.2, 0.3, 0.4, 0.5},
+			Metadata:  map[string]interface{}{"key": "value"},
+		}
+		err := store.Insert(ctx, memory)
+		require.NoError(t, err)
+	}
+
+	// Verify memories exist
+	getOptions := &storage.GetAllOptions{Limit: 10}
+	results, err := store.GetAll(ctx, getOptions)
+	require.NoError(t, err)
+	assert.Equal(t, 3, len(results))
+
+	// Reset the store
+	err = store.Reset(ctx)
+	require.NoError(t, err)
+
+	// Verify all memories are deleted
+	results, err = store.GetAll(ctx, getOptions)
+	require.NoError(t, err)
+	assert.Equal(t, 0, len(results))
+
+	// Verify we can still insert new memories after reset
+	newMemory := &storage.Memory{
+		ID:        100,
+		UserID:    "new_user",
+		AgentID:   "new_agent",
+		Content:   "New memory after reset",
+		Embedding: []float64{0.1, 0.2, 0.3, 0.4, 0.5},
+		Metadata:  map[string]interface{}{"key": "new_value"},
+	}
+	err = store.Insert(ctx, newMemory)
+	require.NoError(t, err)
+
+	// Verify the new memory exists
+	results, err = store.GetAll(ctx, getOptions)
+	require.NoError(t, err)
+	assert.Equal(t, 1, len(results))
+	assert.Equal(t, "new_user", results[0].UserID)
+}

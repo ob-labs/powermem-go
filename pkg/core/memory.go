@@ -230,7 +230,7 @@ func (c *Client) Add(ctx context.Context, content string, opts ...AddOption) (*M
 		c.mu.Unlock()
 		result, err := c.IntelligentAdd(ctx, content, opts...)
 		c.mu.Lock()
-		
+
 		if err != nil {
 			// If IntelligentAdd fails and fallback is not enabled, return error
 			if c.config.Intelligence == nil || !c.config.Intelligence.FallbackToSimpleAdd {
@@ -363,7 +363,7 @@ func (c *Client) Search(ctx context.Context, query string, opts ...SearchOption)
 		Limit:     searchOpts.Limit,
 		MinScore:  searchOpts.MinScore,
 		Threshold: searchOpts.MinScore, // Python SDK compatibility
-		Query:     query,                // Pass original query for future hybrid search
+		Query:     query,               // Pass original query for future hybrid search
 		Filters:   searchOpts.Filters,
 	}
 
@@ -619,6 +619,39 @@ func (c *Client) Close() error {
 
 	if len(errs) > 0 {
 		return errs[0] // Return the first error
+	}
+
+	return nil
+}
+
+// Reset resets the memory store by deleting and recreating the vector store collection.
+//
+// This method will:
+//   - Delete all memories from the vector store
+//   - Drop and recreate the collection/table
+//   - Preserve the existing configuration
+//
+// WARNING: This operation will delete ALL memories and cannot be undone.
+// Use with extreme caution.
+//
+// Parameters:
+//   - ctx: Context for cancellation
+//
+// Returns an error if reset fails.
+//
+// Example:
+//
+//	err := client.Reset(ctx)
+//	if err != nil {
+//	    log.Fatal(err)
+//	}
+func (c *Client) Reset(ctx context.Context) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	// Reset vector store
+	if err := c.storage.Reset(ctx); err != nil {
+		return NewMemoryError("Reset", err)
 	}
 
 	return nil

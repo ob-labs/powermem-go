@@ -66,6 +66,8 @@ func NewClient(cfg *Config) (*Client, error) {
 }
 
 // initTables initializes the database table.
+// If the table already exists with an incompatible schema (e.g. missing user_id),
+// it is dropped and recreated.
 func (c *Client) initTables(ctx context.Context) error {
 	// Enable pgvector extension
 	_, err := c.db.ExecContext(ctx, "CREATE EXTENSION IF NOT EXISTS vector")
@@ -94,12 +96,20 @@ func (c *Client) initTables(ctx context.Context) error {
 		return fmt.Errorf("initTables: create table: %w", err)
 	}
 
-	// Create index
+	// Create index (user_id, agent_id for multi-tenant filtering)
 	indexQuery := fmt.Sprintf(`
 		CREATE INDEX IF NOT EXISTS idx_%s_user_agent ON %s(user_id, agent_id)
 	`, c.collectionName, c.collectionName)
 	_, err = c.db.ExecContext(ctx, indexQuery)
 	if err != nil {
+		// Table may exist from older schema without user_id; drop and recreate once
+		if strings.Contains(err.Error(), "does not exist") {
+			dropQuery := fmt.Sprintf("DROP TABLE IF EXISTS %s", c.collectionName)
+			if _, dropErr := c.db.ExecContext(ctx, dropQuery); dropErr != nil {
+				return fmt.Errorf("initTables: drop incompatible table: %w", dropErr)
+			}
+			return c.initTables(ctx)
+		}
 		return fmt.Errorf("initTables: create index: %w", err)
 	}
 
@@ -566,4 +576,24 @@ func parseVectorString(s string) ([]float64, error) {
 	}
 
 	return result, nil
+}
+
+// Reset resets the vector store by dropping and recreating the table.
+//
+// WARNING: This operation will delete ALL memories and cannot be undone.
+// The table will be recreated with the same schema and indexes.
+func (c *Client) Reset(ctx context.Context) error {
+	// Drop the table
+	dropQuery := fmt.Sprintf("DROP TABLE IF EXISTS %s", c.collectionName)
+	_, err := c.db.ExecContext(ctx, dropQuery)
+	if err != nil {
+		return fmt.Errorf("Reset: failed to drop table: %w", err)
+	}
+
+	// Recreate the table
+	if err := c.initTables(ctx); err != nil {
+		return fmt.Errorf("Reset: failed to recreate table: %w", err)
+	}
+
+	return nil
 }
