@@ -44,9 +44,9 @@ EMBEDDER_PROVIDER=qwen
 EMBEDDER_API_KEY=your_api_key_here
 EMBEDDER_MODEL=text-embedding-v4
 
-# Vector Store Configuration
-VECTOR_STORE_PROVIDER=sqlite
-VECTOR_STORE_COLLECTION_NAME=memories
+# Database Configuration (alternative to PostgreSQL/OceanBase)
+DATABASE_PROVIDER=sqlite
+SQLITE_COLLECTION=memories
 ```
 
 2. **Use the SDK**:
