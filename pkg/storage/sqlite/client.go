@@ -423,6 +423,26 @@ func (c *Client) CreateIndex(ctx context.Context, config *storage.VectorIndexCon
 	return nil
 }
 
+// Reset resets the vector store by dropping and recreating the table.
+//
+// WARNING: This operation will delete ALL memories and cannot be undone.
+// The table will be recreated with the same schema and indexes.
+func (c *Client) Reset(ctx context.Context) error {
+	// Drop the table
+	dropQuery := fmt.Sprintf("DROP TABLE IF EXISTS %s", c.collectionName)
+	_, err := c.db.ExecContext(ctx, dropQuery)
+	if err != nil {
+		return fmt.Errorf("Reset: failed to drop table: %w", err)
+	}
+
+	// Recreate the table
+	if err := c.initTables(ctx); err != nil {
+		return fmt.Errorf("Reset: failed to recreate table: %w", err)
+	}
+
+	return nil
+}
+
 // scanMemory scans a memory from a database row or rows.
 func (c *Client) scanMemory(scanner interface{}) (*storage.Memory, error) {
 	var memory storage.Memory

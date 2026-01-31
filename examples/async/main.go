@@ -188,6 +188,34 @@ func main() {
 		fmt.Printf("✓ Successfully retrieved %d/%d memories\n", successCount, len(memories))
 	}
 
+	// Example 5: Reset memory store asynchronously
+	fmt.Println("\nExample 5: Reset memory store asynchronously...")
+	fmt.Println("  ⚠️  This will delete ALL memories in the store.")
+	resetErrChan := asyncClient.ResetAsync(ctx)
+	resetErr := <-resetErrChan
+	if resetErr != nil {
+		log.Fatalf("Failed to reset: %v", resetErr)
+	}
+	fmt.Println("✓ Memory store reset successfully!")
+
+	// Verify and add one memory after reset
+	getAllChan := asyncClient.GetAllAsync(ctx,
+		powermem.WithUserIDForGetAll(userID),
+		powermem.WithLimitForGetAll(10),
+	)
+	getAllResult := <-getAllChan
+	if getAllResult.Error != nil {
+		log.Fatalf("Failed to get all after reset: %v", getAllResult.Error)
+	}
+	fmt.Printf("✓ Memories after reset: %d (expected 0)\n", len(getAllResult.Memories))
+
+	addChan := asyncClient.AddAsync(ctx, "Fresh start after async reset", powermem.WithUserID(userID))
+	addResult := <-addChan
+	if addResult.Error != nil {
+		log.Fatalf("Failed to add after reset: %v", addResult.Error)
+	}
+	fmt.Printf("✓ Added after reset: %s (ID: %d)\n", addResult.Memory.Content, addResult.Memory.ID)
+
 	fmt.Println("\n" + repeat("=", 60))
 	fmt.Println("All async operations completed!")
 	fmt.Println(repeat("=", 60))

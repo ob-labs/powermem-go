@@ -115,6 +115,37 @@ func main() {
 		log.Fatalf("Failed to get all memories: %v", err)
 	}
 	fmt.Printf("✓ Total memories: %d\n", len(allMemories))
+
+	// Reset memory store (demo)
+	fmt.Println("\nResetting memory store (demo)...")
+	fmt.Println("  ⚠️  This will delete ALL memories in the store.")
+	err = client.Reset(ctx)
+	if err != nil {
+		log.Fatalf("Failed to reset: %v", err)
+	}
+	fmt.Println("✓ Memory store reset successfully!")
+
+	// Verify and add one memory after reset
+	allMemories, err = client.GetAll(ctx,
+		powermem.WithUserIDForGetAll(userID),
+		powermem.WithLimitForGetAll(10),
+	)
+	if err != nil {
+		log.Fatalf("Failed to get all after reset: %v", err)
+	}
+	fmt.Printf("✓ Memories after reset: %d (expected 0)\n", len(allMemories))
+
+	memoryAfterReset, err := client.Add(ctx, "Fresh start after reset",
+		powermem.WithUserID(userID),
+	)
+	if err != nil {
+		log.Fatalf("Failed to add after reset: %v", err)
+	}
+	fmt.Printf("✓ Added after reset: %s (ID: %d)\n", memoryAfterReset.Content, memoryAfterReset.ID)
+
+	fmt.Println("\n" + repeat("=", 60))
+	fmt.Println("Basic example completed!")
+	fmt.Println(repeat("=", 60))
 }
 
 func repeat(s string, count int) string {

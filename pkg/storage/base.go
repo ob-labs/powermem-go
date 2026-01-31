@@ -170,6 +170,12 @@ type VectorStore interface {
 
 	// CreateIndex creates a vector index for improved search performance.
 	CreateIndex(ctx context.Context, config *VectorIndexConfig) error
+
+	// Reset resets the vector store by dropping and recreating the collection/table.
+	//
+	// WARNING: This operation will delete ALL memories and cannot be undone.
+	// Use with caution.
+	Reset(ctx context.Context) error
 }
 
 // SearchOptions contains options for search operations.

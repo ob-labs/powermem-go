@@ -250,6 +250,29 @@ func (ac *AsyncClient) Close() error {
 	return ac.Client.Close()
 }
 
+// ResetAsync resets the memory store asynchronously by deleting and recreating the vector store collection.
+//
+// WARNING: This operation will delete ALL memories and cannot be undone.
+//
+// Parameters:
+//   - ctx: Context for cancellation
+//
+// Returns:
+//   - <-chan error: Channel that receives an error if reset fails, or nil if successful
+func (ac *AsyncClient) ResetAsync(ctx context.Context) <-chan error {
+	resultChan := make(chan error, 1)
+	ac.wg.Add(1)
+
+	go func() {
+		defer ac.wg.Done()
+		err := ac.Reset(ctx)
+		resultChan <- err
+		close(resultChan)
+	}()
+
+	return resultChan
+}
+
 // MemoryResult contains the result of a memory operation.
 type MemoryResult struct {
 	// Memory is the memory returned by the operation (nil if error occurred).
